@@ -1,6 +1,11 @@
-# Sort tabs advanced
+# Sort Selected Tabs
 
-https://addons.mozilla.org/firefox/addon/sort-tabs-advanced/
+A fork of [Sort tabs advanced](https://github.com/monomon/sort-tabs-advanced)
+by Mois Moshev ([original on AMO](https://addons.mozilla.org/firefox/addon/sort-tabs-advanced/)).
+This fork adds the option to sort only the tabs you have selected.
+It is a separate add-on with its own name and add-on ID, and is not affiliated with the original.
+
+Licensed under the Mozilla Public License 2.0, like the original (see `LICENSE`).
 
 Web extension for sorting tabs by various criteria:
 
@@ -15,9 +20,18 @@ I found myself frustrated that it's not possible to sort tabs by domain in Firef
 Then, I discovered that sorting tabs by access time is kinda useful.
 You can push the tabs you use often to the top, sinking old ones saved for later.
 
-There are switches in the popup that allow toggling automatic sorting and pinned tab sorting.
+There are switches in the popup that allow toggling automatic sorting, pinned tab sorting and sorting only the selected tabs.
 
-![sort tabs screenshot](sort_tabs_screenshot.png)
+## Sorting only selected tabs
+
+Select several tabs (Ctrl+click or Shift+click on the tab strip), open the popup,
+tick "sort only selected tabs" and pick a sorting method.
+
+* Only the selected tabs move. They trade places among the positions they already occupy; every other tab stays where it is.
+* With fewer than two tabs selected, nothing is sorted.
+* Selected pinned tabs are sorted only if "sort pinned tabs" is also ticked.
+* Selected tabs in a tab group are sorted within that group.
+* Automatic sorting is paused while "sort only selected tabs" is ticked.
 
 ## Automatic sorting
 

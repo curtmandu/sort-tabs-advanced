@@ -3,88 +3,45 @@
  */
 
 /**
- * menu definitions
+ * Sort criteria. Each one gets an ascending and a descending button,
+ * with ids of the form "sort-by-<key>-asc" / "sort-by-<key>-desc"
  */
-let menuDefs = [{
-	id : "sort-by-url-asc",
-	title : "sort by url (asc)",
-	contexts : ["tools_menu", "browser_action"],
-	icons : {
-		16 : "icons/sort-icon-url-asc-16.png"
-	}
+let sortDefs = [{
+	key : "url",
+	title : "URL",
+	asc : "A to Z",
+	desc : "Z to A"
 }, {
-	id : "sort-by-url-desc",
-	title : "sort by url (desc)",
-	contexts : ["tools_menu", "browser_action"],
-	icons : {
-		16 : "icons/sort-icon-url-desc-16.png"
-	}
+	key : "domain",
+	title : "Domain",
+	asc : "A to Z",
+	desc : "Z to A"
 }, {
-	id : "sort-by-domain-asc",
-	title : "sort by domain (asc)",
-	contexts : ["tools_menu", "browser_action"],
-	icons : {
-		16 : "icons/sort-icon-domain-asc-16.png"
-	}
+	key : "title",
+	title : "Title",
+	asc : "A to Z",
+	desc : "Z to A"
 }, {
-	id : "sort-by-domain-desc",
-	title : "sort by domain (desc)",
-	contexts : ["tools_menu", "browser_action"],
-	icons : {
-		16 : "icons/sort-icon-domain-desc-16.png"
-	}
+	key : "last-access",
+	title : "Last accessed",
+	asc : "oldest first",
+	desc : "newest first"
 }, {
-	id : "sort-by-title-asc",
-	title : "sort by title (asc)",
-	contexts : ["tools_menu", "browser_action"],
-	icons : {
-		16 : "icons/sort-icon-title-asc-16.png"
-	}
-}, {
-	id : "sort-by-title-desc",
-	title : "sort by title (desc)",
-	contexts : ["tools_menu", "browser_action"],
-	icons : {
-		16 : "icons/sort-icon-title-desc-16.png"
-	}
-}, {
-	id : "sort-by-last-access-asc",
-	title : "sort by last access (asc)",
-	contexts : ["tools_menu", "browser_action"],
-	icons : {
-		16 : "icons/sort-icon-access-time-asc-16.png"
-	}
-}, {
-	id : "sort-by-last-access-desc",
-	title : "sort by last access (desc)",
-	contexts : ["tools_menu", "browser_action"],
-	icons : {
-		16 : "icons/sort-icon-access-time-desc-16.png"
-	}
-}, {
-	id : "sort-by-container-asc",
-	title : "sort by container (asc)",
-	contexts : ["tools_menu", "browser_action"],
-	icons : {
-		16 : "icons/sort-icon-container-asc-16.png"
-	}
-}, {
-	id : "sort-by-container-desc",
-	title : "sort by container (desc)",
-	contexts : ["tools_menu", "browser_action"],
-	icons : {
-		16 : "icons/sort-icon-container-desc-16.png"
-	}
+	key : "container",
+	title : "Container",
+	asc : "A to Z",
+	desc : "Z to A"
 }];
 
 let settingsDefs = [{
-	id : "settings-sort-auto",
-	title : "sort automatically",
-	contexts : ["tools_menu", "browser_action"]
+	id : "settings-sort-selected",
+	title : "Only selected tabs"
 }, {
-  id: "settings-sort-pinned",
-  title: "sort pinned tabs",
-	contexts : ["tools_menu", "browser_action"]
+	id : "settings-sort-pinned",
+	title : "Include pinned tabs"
+}, {
+	id : "settings-sort-auto",
+	title : "Sort automatically"
 }];
 
 
@@ -102,88 +59,131 @@ function initializeSettings() {
     return browser.storage.local.get(defaultDict);
 }
 
-function clickHandler(evt, settings) {
+function clickHandler(button, settings) {
     let backgroundWindow = browser.runtime.getBackgroundPage();
     backgroundWindow.then(
-        (w) => w.sortTabsComparatorName(evt.target.id, settings))
+        (w) => w.sortTabsComparatorName(button.id, settings))
 		    .then(
             (tab) => {
-                console.log("Click handler: " + evt.target.id);
                 return browser.storage.local.set({
-                    "last-comparator": evt.target.id
+                    "last-comparator": button.id
                 }).then(
 				            () => {
-                        document.querySelectorAll("div.active").forEach(
+                        document.querySelectorAll(".active").forEach(
                             (el) => {
                                 el.classList.remove("active");
+                                el.setAttribute("aria-pressed", "false");
                             });
-                        evt.target.classList.add("active");
-                        console.log(evt.target);
-                        // window.close();
+                        button.classList.add("active");
+                        button.setAttribute("aria-pressed", "true");
                     },
                     onError);
 			      }, onError);
 }
 
+/**
+ * Show a hint when "only selected tabs" is on
+ * but fewer than two tabs are selected
+ */
+function updateSelectionHint(settings) {
+  const hint = document.getElementById("selection-hint");
+
+  if (!settings["settings-sort-selected"]) {
+    hint.hidden = true;
+    return Promise.resolve();
+  }
+
+  return browser.tabs.query({
+    highlighted : true,
+    currentWindow : true
+  }).then(
+    (tabs) => {
+      hint.hidden = false;
+      hint.innerText = tabs.length > 1
+        ? tabs.length.toString() + " tabs selected"
+        : "Select two or more tabs first (Ctrl+click or Shift+click)";
+    }, onError);
+}
+
 function settingsClickHandler(evt, settings) {
+  // keep the popup's copy of the settings current,
+  // so that a toggle applies to the next sort without reopening the popup
+  settings[evt.target.id] = evt.target.checked;
+  updateSelectionHint(settings);
   let backgroundWindow = browser.runtime.getBackgroundPage();
   return backgroundWindow.then(
     (w) => w.settingChanged(evt));
 }
 
-function createButton(buttonDef, settings) {
-	  let newEl = document.createElement('div');
-	  newEl.id = buttonDef.id;
-    newEl.innerText = buttonDef.title;
-	  // newEl.src = "../" + buttonDef.icons[16];
-	  newEl.addEventListener(
-        "click",
-        (evt) => clickHandler(evt, settings));
+function createDirectionButton(sortDef, direction, settings) {
+  let button = document.createElement("button");
+  let description = sortDef.title + ", "
+      + (direction == "asc" ? "ascending" : "descending")
+      + " (" + sortDef[direction] + ")";
+  button.type = "button";
+  button.id = "sort-by-" + sortDef.key + "-" + direction;
+  button.className = "direction";
+  button.innerText = direction == "asc" ? "↑" : "↓";
+  button.title = description;
+  button.setAttribute("aria-label", description);
+  button.setAttribute("aria-pressed", "false");
+  button.addEventListener(
+    "click",
+    (evt) => clickHandler(button, settings));
 
-    if (newEl.id == settings["last-comparator"]) {
-        newEl.classList.add("active");
-    }
+  if (button.id == settings["last-comparator"]) {
+    button.classList.add("active");
+    button.setAttribute("aria-pressed", "true");
+  }
 
-	  return newEl;
+  return button;
 }
 
-function createSettingsToggle(buttonDef, settings) {
-  let newEl = document.createElement('div');
-  newEl.id = buttonDef.id;
-  let checkbox = document.createElement('input');
-  checkbox.type = 'checkbox';
-  checkbox.id = buttonDef.id;
-  checkbox.name = buttonDef.id;
-  let label = document.createElement('label');
-  label.innerText = buttonDef.title;
-  label.htmlFor = buttonDef.id;
-  checkbox.checked = settings[buttonDef.id];
+function createSortRow(sortDef, settings) {
+  let row = document.createElement("div");
+  row.className = "row";
+  let label = document.createElement("span");
+  label.className = "row-label";
+  label.innerText = sortDef.title;
+  row.appendChild(label);
+  row.appendChild(createDirectionButton(sortDef, "asc", settings));
+  row.appendChild(createDirectionButton(sortDef, "desc", settings));
+  return row;
+}
 
-  newEl.appendChild(checkbox);
-  newEl.appendChild(label);
+function createSettingsToggle(settingDef, settings) {
+  let label = document.createElement("label");
+  label.className = "row toggle";
+  let checkbox = document.createElement("input");
+  checkbox.type = "checkbox";
+  checkbox.id = settingDef.id;
+  checkbox.name = settingDef.id;
+  checkbox.checked = settings[settingDef.id];
+  let text = document.createElement("span");
+  text.innerText = settingDef.title;
+
+  label.appendChild(checkbox);
+  label.appendChild(text);
   checkbox.addEventListener(
     "click",
     (evt) => settingsClickHandler(evt, settings));
-  return newEl;
+  return label;
 }
 
 function createPopup(settings) {
-  console.log(settings);
-  const settingsGroup = document.createElement("div");
-  const settingsButtons = settingsDefs.map(
-    (def) => createSettingsToggle(def, settings));
-  settingsButtons.forEach((button) => settingsGroup.appendChild(button));
+  let cont = document.getElementById("options");
+  sortDefs.forEach(
+    (sortDef) => cont.appendChild(createSortRow(sortDef, settings)));
 
-  const buttons = menuDefs.map(
-    (menuDef) => createButton(menuDef, settings));
-  const buttonGroup = document.createElement("div");
-  buttons.forEach((button) => buttonGroup.appendChild(button));
-
-	let cont = document.getElementById("options");
-	cont.appendChild(buttonGroup);
-  cont.appendChild(document.createElement("hr"));
   let settingsCont = document.getElementById("settings");
-  settingsCont.appendChild(settingsGroup);
+  settingsDefs.forEach(
+    (def) => settingsCont.appendChild(createSettingsToggle(def, settings)));
+
+  const hint = document.createElement("div");
+  hint.id = "selection-hint";
+  hint.hidden = true;
+  settingsCont.appendChild(hint);
+  updateSelectionHint(settings);
 }
 
 /**

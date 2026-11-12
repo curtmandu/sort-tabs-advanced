@@ -1,36 +1,37 @@
 {
-	  "manifest_version" : 3,
-	  "name" : "Sort tabs advanced",
-	  "version" : "0.5",
-	  "author" : "Mois Moshev <mois@monomon.me>",
-	  "icons" : {
-		    "48" : "icons/sortabs-48.png"
-	  },
-	  "description" : "Sort tabs by various criteria",
-	  "action" : {
-		    "default_icon" : {
-			      "16" : "icons/sortabs-16.png",
-			      "24" : "icons/sortabs-24.png",
-			      "48" : "icons/sortabs-48.png"
-		    },
-		    "default_title" : "Sort tabs advanced",
-		    "default_popup" : "popup/picker.html"
-	  },
-	  "permissions" : [
-		    "tabs",
-        "tabGroups",
-        "storage",
-        "contextualIdentities"
-	  ],
-    "browser_specific_settings": {
-        "gecko": {
-            "id": "{d6f02b92-88b3-4aa5-ba7c-14519042171d}",
-            "data_collection_permissions": {
-                "required": ["none"]
-            }
-        }
-    },
-    "background": {
-        "scripts": ["background.js"]
+  "manifest_version": 3,
+  "name": "Sort Selected Tabs",
+  "version": "1.0.0",
+  "author": "Quillfinch (fork of Sort tabs advanced by Mois Moshev)",
+  "icons": {
+    "48": "icons/icon.svg",
+    "96": "icons/icon.svg"
+  },
+  "description": "Sort only the tabs you have selected, or all tabs, by URL, domain, title, last access or container. Fork of Sort tabs advanced.",
+  "action": {
+    "default_icon": "icons/icon.svg",
+    "default_title": "Sort Selected Tabs",
+    "default_popup": "popup/picker.html"
+  },
+  "permissions": [
+    "tabs",
+    "tabGroups",
+    "storage",
+    "contextualIdentities"
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "sort-selected-tabs@quillfinch",
+      "data_collection_permissions": {
+        "required": [
+          "none"
+        ]
+      }
     }
+  },
+  "background": {
+    "scripts": [
+      "background.js"
+    ]
+  }
 }

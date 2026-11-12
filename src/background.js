@@ -105,6 +105,10 @@ function onSettingsSortPinned(evt) {
   return Promise.resolve();
 }
 
+function onSettingsSortSelected(evt) {
+  return Promise.resolve();
+}
+
 let menuIdToComparator = {
     "sort-by-url-asc" : compareByUrlAsc,
     "sort-by-url-desc" : compareByUrlDesc,
@@ -120,7 +124,8 @@ let menuIdToComparator = {
 
 let settingsMenuIdToHandler = {
   "settings-sort-auto": onSettingsSortAuto,
-  "settings-sort-pinned": onSettingsSortPinned
+  "settings-sort-pinned": onSettingsSortPinned,
+  "settings-sort-selected": onSettingsSortSelected
 };
 
 function sortTabsComparatorName(compName, settings) {
@@ -130,19 +135,107 @@ function sortTabsComparatorName(compName, settings) {
 const defaultSettings = {
     "last-comparator": undefined,
     "settings-sort-auto": false,
-    "settings-sort-pinned": false
+    "settings-sort-pinned": false,
+    "settings-sort-selected": false
 }
 
 function settingsSortAutoHandler(tabId, changeInfo, tabInfo) {
   browser.storage.local.get(defaultSettings).then(
     (settings) => {
+      // sorting a selection is a one-off action: never repeat it automatically,
+      // otherwise tabs dragged by hand would snap back while a selection is active
+      if (settings["settings-sort-selected"]) {
+        return;
+      }
+
       if (menuIdToComparator[settings["last-comparator"]] !== undefined) {
         return sortTabs(menuIdToComparator[settings["last-comparator"]], settings);
       }
     }, onError);
 }
 
+/**
+ * Reorder only the selected (highlighted) tabs.
+ * The selected tabs trade places among the positions they already occupy,
+ * every other tab stays where it is.
+ * Tabs only trade places within the same tab group, so groups are preserved.
+ * Takes all tabs of one kind (pinned or not) in window order
+ * and returns them in the new order.
+ */
+function arrangeSelected(tabs, comparator) {
+    const byGroup = new Map();
+
+    tabs.forEach((tab, position) => {
+        if (!tab.highlighted) {
+            return;
+        }
+
+        if (!byGroup.has(tab.groupId)) {
+            byGroup.set(tab.groupId, { positions : [], tabs : [] });
+        }
+
+        byGroup.get(tab.groupId).positions.push(position);
+        byGroup.get(tab.groupId).tabs.push(tab);
+    });
+
+    const result = tabs.slice();
+
+    for (const bucket of byGroup.values()) {
+        bucket.tabs.sort(comparator);
+        bucket.positions.forEach((position, i) => {
+            result[position] = bucket.tabs[i];
+        });
+    }
+
+    return result;
+}
+
+function sortSelectedTabs(comparator, settings) {
+    return browser.tabs.query({
+        currentWindow : true
+    }).then(
+        (ts) => {
+            // the active tab always counts as selected,
+            // so a single selected tab means there is nothing to sort
+            if (ts.filter((t) => t.highlighted).length < 2) {
+                console.log("Fewer than two tabs selected, not sorting");
+                return [];
+            }
+
+            ts.sort((a, b) => a.index - b.index);
+            const pinnedTabs = ts.filter((t) => t.pinned);
+            const normalTabs = ts.filter((t) => !t.pinned);
+            const newPinned = settings["settings-sort-pinned"]
+                  ? arrangeSelected(pinnedTabs, comparator)
+                  : pinnedTabs;
+            const newNormal = arrangeSelected(normalTabs, comparator);
+            const newOrder = newPinned.concat(newNormal);
+            const changed = newOrder
+                  .map((tab, index) => ts[index].id != tab.id ? index : -1)
+                  .filter((index) => index >= 0);
+
+            if (changed.length == 0) {
+                return [];
+            }
+
+            // Place the tabs one by one, left to right, across the span
+            // that changes. Each move leaves everything to its left final.
+            const first = changed[0];
+            const last = changed[changed.length - 1];
+            console.log("Sorting selected, span " + first.toString() + "-" + last.toString());
+
+            return newOrder.slice(first, last + 1).reduce(
+                (done, tab, offset) => done.then(
+                    () => browser.tabs.move(tab.id, { index : first + offset })),
+                Promise.resolve());
+        }, onError);
+}
+
 function sortTabs(comparator, settings) {
+    if (settings["settings-sort-selected"]) {
+        return sortSelectedTabs(comparator, settings);
+    }
+
     let num_pinned = 0;
     return browser.tabs.query({
         pinned : true,
