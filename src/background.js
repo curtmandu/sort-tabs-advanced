@@ -154,19 +154,43 @@ function settingsSortAutoHandler(tabId, changeInfo, tabInfo) {
     }, onError);
 }
 
+const NO_GROUP = -1;
+
 /**
- * Reorder only the selected (highlighted) tabs.
- * The selected tabs trade places among the positions they already occupy,
- * every other tab stays where it is.
- * Tabs only trade places within the same tab group, so groups are preserved.
- * Takes all tabs of one kind (pinned or not) in window order
- * and returns them in the new order.
+ * All tabs of the current window in strip order, split into pinned and normal
  */
-function arrangeSelected(tabs, comparator) {
+function queryWindowTabs() {
+    return browser.tabs.query({
+        currentWindow : true
+    }).then(
+        (ts) => {
+            ts.sort((a, b) => a.index - b.index);
+            ts.forEach((t) => {
+                // older Firefox versions have no tab groups
+                if (t.groupId === undefined) {
+                    t.groupId = NO_GROUP;
+                }
+            });
+
+            return {
+                pinned : ts.filter((t) => t.pinned),
+                normal : ts.filter((t) => !t.pinned)
+            };
+        });
+}
+
+/**
+ * Reorder some of the tabs, leaving the rest where they are.
+ * The tabs picked by isMovable trade places among the positions they already
+ * occupy. Tabs only trade places within the same tab group,
+ * so groups are preserved.
+ * Takes tabs in strip order and returns them in the new order.
+ */
+function arrangeMovable(tabs, comparator, isMovable) {
     const byGroup = new Map();
 
     tabs.forEach((tab, position) => {
-        if (!tab.highlighted) {
+        if (!isMovable(tab)) {
             return;
         }
 
@@ -190,50 +214,155 @@ function arrangeSelected(tabs, comparator) {
     return result;
 }
 
-function sortSelectedTabs(comparator, settings) {
-    return browser.tabs.query({
-        currentWindow : true
-    }).then(
+/**
+ * Move tabs so that the strip goes from the order in current to the order
+ * in wanted. Both hold the same tabs, with every group contiguous.
+ * base is the strip index of the first tab.
+ *
+ * Tabs are placed one by one, left to right, so every move is to the left
+ * and everything before the tab being placed is already final.
+ * Firefox puts a moved tab into the group of the tab it lands in front of,
+ * so the moves are chosen to keep each tab's group:
+ * - the first tab of a group brings the whole group along (tabGroups.move)
+ * - other grouped tabs always land in front of a tab of their own group
+ * - an ungrouped tab landing in front of a group is taken out of it again;
+ *   being first in the group, it ends up just before the group
+ */
+async function applyOrder(current, wanted, base) {
+    const cur = current.slice();
+
+    for (let i = 0; i < wanted.length; i++) {
+        const tab = wanted[i];
+
+        if (cur[i].id == tab.id) {
+            continue;
+        }
+
+        const startsGroup = tab.groupId != NO_GROUP
+              && (i == 0 || wanted[i - 1].groupId != tab.groupId);
+
+        if (startsGroup) {
+            const first = cur.findIndex((t) => t.groupId == tab.groupId);
+
+            if (first != i) {
+                const members = cur.filter((t) => t.groupId == tab.groupId);
+                await browser.tabGroups.move(tab.groupId, { index : base + i });
+                cur.splice(first, members.length);
+                cur.splice(i, 0, ...members);
+            }
+
+            if (cur[i].id == tab.id) {
+                continue;
+            }
+        }
+
+        const landsInGroup = cur[i].groupId != NO_GROUP;
+        await browser.tabs.move(tab.id, { index : base + i });
+
+        if (tab.groupId == NO_GROUP && landsInGroup) {
+            await browser.tabs.ungroup(tab.id);
+        }
+
+        cur.splice(cur.findIndex((t) => t.id == tab.id), 1);
+        cur.splice(i, 0, tab);
+    }
+}
+
+/**
+ * Sort only part of the tabs: the selected (highlighted) ones,
+ * the ones in a given group, or the selected ones in a given group
+ */
+function sortSomeTabs(comparator, settings) {
+    const scopeGroupId = settings["scope-group-id"];
+    const onlySelected = settings["settings-sort-selected"];
+    const isMovable = (tab) =>
+          (scopeGroupId === undefined || tab.groupId == scopeGroupId)
+          && (!onlySelected || tab.highlighted);
+
+    return queryWindowTabs().then(
         (ts) => {
             // the active tab always counts as selected,
-            // so a single selected tab means there is nothing to sort
-            if (ts.filter((t) => t.highlighted).length < 2) {
-                console.log("Fewer than two tabs selected, not sorting");
-                return [];
+            // so a single movable tab means there is nothing to sort
+            if (ts.pinned.concat(ts.normal).filter(isMovable).length < 2) {
+                console.log("Fewer than two tabs to sort, not sorting");
+                return;
             }
 
-            ts.sort((a, b) => a.index - b.index);
-            const pinnedTabs = ts.filter((t) => t.pinned);
-            const normalTabs = ts.filter((t) => !t.pinned);
             const newPinned = settings["settings-sort-pinned"]
-                  ? arrangeSelected(pinnedTabs, comparator)
-                  : pinnedTabs;
-            const newNormal = arrangeSelected(normalTabs, comparator);
-            const newOrder = newPinned.concat(newNormal);
-            const changed = newOrder
-                  .map((tab, index) => ts[index].id != tab.id ? index : -1)
-                  .filter((index) => index >= 0);
+                  ? arrangeMovable(ts.pinned, comparator, isMovable)
+                  : ts.pinned;
+            const newNormal = arrangeMovable(ts.normal, comparator, isMovable);
 
-            if (changed.length == 0) {
-                return [];
+            return applyOrder(ts.pinned, newPinned, 0).then(
+                () => applyOrder(ts.normal, newNormal, ts.pinned.length));
+        }).catch(onError);
+}
+
+/**
+ * Sort the tab groups themselves by name.
+ * The groups trade places among the spots that groups already occupy,
+ * ungrouped tabs stay between the same groups as before.
+ * Unnamed groups go last.
+ */
+function sortGroupsByName(direction) {
+    return queryWindowTabs().then(
+        (ts) => {
+            const groupIds = [];
+
+            for (const tab of ts.normal) {
+                if (tab.groupId != NO_GROUP && !groupIds.includes(tab.groupId)) {
+                    groupIds.push(tab.groupId);
+                }
             }
 
-            // Place the tabs one by one, left to right, across the span
-            // that changes. Each move leaves everything to its left final.
-            const first = changed[0];
-            const last = changed[changed.length - 1];
-            console.log("Sorting selected, span " + first.toString() + "-" + last.toString());
+            if (groupIds.length < 2) {
+                console.log("Fewer than two groups, not sorting");
+                return;
+            }
 
-            return newOrder.slice(first, last + 1).reduce(
-                (done, tab, offset) => done.then(
-                    () => browser.tabs.move(tab.id, { index : first + offset })),
-                Promise.resolve());
-        }, onError);
+            return browser.tabGroups.query({
+                windowId : ts.normal[0].windowId
+            }).then(
+                (groups) => {
+                    const titles = new Map(
+                        groups.map((g) => [g.id, (g.title || "").trim()]));
+                    const sign = direction == "desc" ? -1 : 1;
+                    const sortedIds = groupIds.slice().sort(
+                        (a, b) => {
+                            const titleA = titles.get(a) || "";
+                            const titleB = titles.get(b) || "";
+
+                            if (!titleA || !titleB) {
+                                return (titleA ? 0 : 1) - (titleB ? 0 : 1);
+                            }
+
+                            return sign * titleA.localeCompare(
+                                titleB,
+                                undefined,
+                                { numeric : true, sensitivity : "base" });
+                        });
+
+                    const wanted = [];
+                    let spot = 0;
+
+                    ts.normal.forEach((tab, i) => {
+                        if (tab.groupId == NO_GROUP) {
+                            wanted.push(tab);
+                        } else if (i == 0 || ts.normal[i - 1].groupId != tab.groupId) {
+                            const groupId = sortedIds[spot++];
+                            wanted.push(...ts.normal.filter((t) => t.groupId == groupId));
+                        }
+                    });
+
+                    return applyOrder(ts.normal, wanted, ts.pinned.length);
+                });
+        }).catch(onError);
 }
 
 function sortTabs(comparator, settings) {
-    if (settings["settings-sort-selected"]) {
-        return sortSelectedTabs(comparator, settings);
+    if (settings["settings-sort-selected"]
+        || settings["scope-group-id"] !== undefined) {
+        return sortSomeTabs(comparator, settings);
     }
 
     let num_pinned = 0;

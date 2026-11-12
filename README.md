@@ -33,6 +33,13 @@ tick "sort only selected tabs" and pick a sorting method.
 * Selected tabs in a tab group are sorted within that group.
 * Automatic sorting is paused while "sort only selected tabs" is ticked.
 
+## Tab groups
+
+When the window has tab groups, the popup shows two extra controls:
+
+* "Sort within" picks what the sort buttons apply to: all tabs, or the tabs of one group. With a group picked, only that group's tabs are sorted. Combined with "Only selected tabs", only the selected tabs in that group are sorted.
+* "Order groups" (shown with two or more groups) sorts the groups themselves by name. Groups trade places among the spots groups already occupy; ungrouped tabs stay between the same groups as before. Unnamed groups go last.
+
 ## Automatic sorting
 
 The last sorting method that you selected gets remembered in settings.
@@ -41,7 +48,7 @@ If automatic sorting is enabled, this sorting method will be applied every time 
 
 Automatic sorting is preserved between browser restarts.
 
-## Tab groups
+## Tab groups when sorting all tabs
 
 The addon preserves tab groups.
 
@@ -50,3 +57,7 @@ The addon preserves tab groups.
 ## Building the extension
 
 Run `build.sh`, which uses `web-ext`.
+
+## Tests
+
+Run `node test/sort.test.js`. It runs every sort mode against a simulated tab strip that follows Firefox's rules for moving tabs and groups.

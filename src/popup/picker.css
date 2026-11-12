@@ -101,3 +101,28 @@ button.direction.active:hover {
     font-size: 12px;
     color: var(--color-muted);
 }
+
+#scope:not(:empty) {
+    margin-bottom: 10px;
+}
+
+.scope {
+    gap: 8px;
+}
+
+.scope select {
+    flex: 1;
+    min-width: 0;
+    max-width: 180px;
+    height: 26px;
+    padding: 0 4px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background-color: var(--background-color);
+    color: var(--color-text);
+    font: inherit;
+}
+
+#groups:not(:empty) {
+    margin-top: 10px;
+}
