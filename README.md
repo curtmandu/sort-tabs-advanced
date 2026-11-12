@@ -1,63 +1,75 @@
 # Sort Selected Tabs
 
-A fork of [Sort tabs advanced](https://github.com/monomon/sort-tabs-advanced)
-by Mois Moshev ([original on AMO](https://addons.mozilla.org/firefox/addon/sort-tabs-advanced/)).
-This fork adds the option to sort only the tabs you have selected.
-It is a separate add-on with its own name and add-on ID, and is not affiliated with the original.
+A Firefox add-on for sorting tabs. It can sort the whole window, but it can also sort only the tabs you've selected, only the tabs in one group, or the groups themselves.
 
-Licensed under the Mozilla Public License 2.0, like the original (see `LICENSE`).
+## What it sorts by
 
-Web extension for sorting tabs by various criteria:
+Each of these has an ascending (↑) and a descending (↓) button in the popup:
 
-* url
-* domain
-* title
-* last time of access
-* container
+| Sort by | ↑ | ↓ |
+| --- | --- | --- |
+| URL | A to Z | Z to A |
+| Domain | A to Z | Z to A |
+| Title | A to Z | Z to A |
+| Last accessed | oldest first | newest first |
+| Container | A to Z | Z to A |
 
-I found myself frustrated that it's not possible to sort tabs by domain in Firefox 57.
-
-Then, I discovered that sorting tabs by access time is kinda useful.
-You can push the tabs you use often to the top, sinking old ones saved for later.
-
-There are switches in the popup that allow toggling automatic sorting, pinned tab sorting and sorting only the selected tabs.
+The button you used last stays highlighted.
 
 ## Sorting only selected tabs
 
-Select several tabs (Ctrl+click or Shift+click on the tab strip), open the popup,
-tick "sort only selected tabs" and pick a sorting method.
+1. Select the tabs you want sorted with Ctrl+click or Shift+click on the tab strip.
+2. Open the popup and tick "Only selected tabs".
+3. Click a sort button.
 
-* Only the selected tabs move. They trade places among the positions they already occupy; every other tab stays where it is.
-* With fewer than two tabs selected, nothing is sorted.
-* Selected pinned tabs are sorted only if "sort pinned tabs" is also ticked.
-* Selected tabs in a tab group are sorted within that group.
-* Automatic sorting is paused while "sort only selected tabs" is ticked.
+The selected tabs swap places with each other. The rest don't move.
+
+* With fewer than two tabs selected, nothing happens, and the popup says so.
+* Selected pinned tabs are sorted only if "Include pinned tabs" is also ticked.
+* Selected tabs inside a tab group are sorted within that group and stay in it.
 
 ## Tab groups
 
-When the window has tab groups, the popup shows two extra controls:
+When the window has tab groups, the popup shows two more controls.
 
-* "Sort within" picks what the sort buttons apply to: all tabs, or the tabs of one group. With a group picked, only that group's tabs are sorted. Combined with "Only selected tabs", only the selected tabs in that group are sorted.
-* "Order groups" (shown with two or more groups) sorts the groups themselves by name. Groups trade places among the spots groups already occupy; ungrouped tabs stay between the same groups as before. Unnamed groups go last.
+**Sort within** chooses what the sort buttons apply to: all tabs, or the tabs of one group. With a group chosen, only that group's tabs are sorted. If "Only selected tabs" is also ticked, only the selected tabs in that group are sorted.
 
-## Automatic sorting
+**Order groups** appears when there are two or more groups, and sorts the groups themselves by name. Groups swap places with each other, so any ungrouped tabs between them stay where they were. Groups without a name go last.
 
-The last sorting method that you selected gets remembered in settings.
+When sorting all tabs, groups stay where they are. Each group's tabs are sorted inside the group, and each run of ungrouped tabs between groups is sorted on its own.
 
-If automatic sorting is enabled, this sorting method will be applied every time you change tabs (create new, change url, etc.).
+## Options
 
-Automatic sorting is preserved between browser restarts.
+* **Only selected tabs**: described above.
+* **Include pinned tabs**: pinned tabs are left alone unless this is ticked. Pinned tabs are always sorted separately from the rest.
+* **Sort automatically**: repeats the last sort you used whenever a tab is opened or changes. The setting survives browser restarts. It is paused while "Only selected tabs" is ticked, so tabs you drag by hand stay put.
 
-## Tab groups when sorting all tabs
+## Privacy
 
-The addon preserves tab groups.
+The add-on collects no data and makes no network requests. Your settings are stored locally in Firefox.
 
-"Islands" of tab groups, surrounded by ungrouped tabs, are preserved. The ungrouped tabs before and after the group are sorted separately.
+## Development
 
-## Building the extension
+It's plain JavaScript, so there's nothing to compile. To lint and package it:
 
-Run `build.sh`, which uses `web-ext`.
+```bash
+npx web-ext lint --source-dir=src
+```
 
-## Tests
+```bash
+npx web-ext build --source-dir=src --artifacts-dir=build --overwrite-dest
+```
 
-Run `node test/sort.test.js`. It runs every sort mode against a simulated tab strip that follows Firefox's rules for moving tabs and groups.
+The tests run each sort mode against a simulated tab strip that moves tabs and groups the way Firefox does:
+
+```bash
+node test/sort.test.js
+```
+
+To try it in Firefox, open `about:debugging#/runtime/this-firefox`, click "Load Temporary Add-on" and choose `src/manifest.json`.
+
+## Credits and license
+
+Sort Selected Tabs is a fork of [Sort tabs advanced](https://github.com/monomon/sort-tabs-advanced) by Mois Moshev. It is a separate add-on with its own name and add-on ID, and is not affiliated with the original.
+
+Licensed under the Mozilla Public License 2.0, the same license as the original. See [LICENSE](LICENSE).

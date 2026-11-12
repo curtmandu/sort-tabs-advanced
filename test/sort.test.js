@@ -1,7 +1,7 @@
 // Simulated tab strip following Firefox's move rules (read from Firefox source):
 //  tabs.move: no-op if already there; moving left lands in front of the tab at
 //    the index, moving right lands behind it; either way the tab joins that
-//    neighbour's group (or none)
+//    neighbor's group (or none)
 //  tabs.ungroup: first tab of group goes just before the group, else just after
 //  tabGroups.move: whole group, refused in the middle of another group
 const fs=require('fs'),vm=require('vm');
